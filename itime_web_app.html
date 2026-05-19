@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>爱时间 Excel 复盘看板</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #162033;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --primary: #1d4ed8;
+      --primary2: #0f172a;
+      --accent: #f59e0b;
+      --shadow: 0 12px 30px rgba(15, 23, 42, .08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(29, 78, 216, 0.10), transparent 24%),
+        radial-gradient(circle at right top, rgba(245, 158, 11, 0.12), transparent 20%),
+        var(--bg);
+    }
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 22px 18px 40px; }
+    .hero {
+      background: linear-gradient(135deg, var(--primary2), #183ea8);
+      color: white;
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -120px;
+      top: -120px;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      filter: blur(4px);
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 32px; letter-spacing: .3px; }
+    .hero p { margin: 0; color: rgba(255,255,255,.88); line-height: 1.7; max-width: 920px; }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; margin-top: 18px; }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(219, 227, 239, .9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .sidebar { padding: 18px; position: sticky; top: 14px; height: fit-content; }
+    .content { padding: 18px; }
+    .section { margin-bottom: 18px; }
+    .section h2, .section h3 { margin: 0 0 12px; }
+    .label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    input[type="file"], input[type="date"], select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      color: var(--text);
+      outline: none;
+    }
+    select[multiple] { min-height: 180px; }
+    .activity-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .activity-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      max-height: 260px;
+      overflow: auto;
+    }
+    .activity-list.disabled {
+      opacity: .55;
+      pointer-events: none;
+    }
+    .activity-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid #dbe3ef;
+      border-radius: 999px;
+      background: #f8fafc;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .activity-item input { margin: 0; }
+    .muted { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat {
+      background: linear-gradient(180deg, #fff, #fbfdff);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .stat .k { color: var(--muted); font-size: 12px; }
+    .stat .v { font-size: 24px; font-weight: 800; margin-top: 6px; }
+    .chart { width: 100%; height: 520px; }
+    .chart.tall { height: 760px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #edf2f7; text-align: left; white-space: nowrap; }
+    th { background: #f8fafc; position: sticky; top: 0; z-index: 1; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button, .btn {
+      border: 0;
+      background: var(--primary);
+      color: white;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button.secondary, .btn.secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .hidden { display: none !important; }
+    .divider { height: 1px; background: var(--line); margin: 16px 0; }
+    .summary-box {
+      border-left: 4px solid var(--accent);
+      background: #fffaf0;
+      padding: 14px 14px 14px 16px;
+      border-radius: 12px;
+      line-height: 1.8;
+      color: #7c2d12;
+    }
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 12px 14px;
+      border-radius: 12px;
+      line-height: 1.7;
+    }
+    .ok {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 12px 14px;
+      border-radius: 12px;
+      line-height: 1.7;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .stats, .row { grid-template-columns: 1fr; }
+      .chart, .chart.tall { height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="pill">爱时间 Excel 复盘看板</div>
+      <h1>上传 Excel，立即生成时间分析和可视化</h1>
+      <p>这个网页端原型直接在浏览器里读取爱时间导出的 Excel，不需要安装软件。你上传文件后，它会自动识别“详细记录 / 日统计 / 复盘总结”，并生成折线图、占比图、热力图和可分享的 HTML 报告。</p>
+    </section>
+
+    <div class="grid">
+      <aside class="card sidebar">
+        <div class="section">
+          <h3>上传文件</h3>
+          <label class="label">选择爱时间导出的 Excel</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xls" />
+          <div class="muted" style="margin-top:8px;">支持你现在这类导出结构，默认识别“详细记录 / 日统计 / 复盘总结”。</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+          <h3>筛选条件</h3>
+          <label class="label">日期范围开始</label>
+          <input id="startDate" type="date" disabled />
+          <div style="height:10px;"></div>
+          <label class="label">日期范围结束</label>
+          <input id="endDate" type="date" disabled />
+          <div style="height:10px;"></div>
+          <label class="label">活动类型</label>
+          <div class="activity-toolbar">
+            <button id="activityAllBtn" class="secondary" type="button" disabled>全选</button>
+            <button id="activityNoneBtn" class="secondary" type="button" disabled>清空</button>
+          </div>
+          <div id="activitySelectList" class="activity-list disabled" aria-label="活动类型多选"></div>
+          <div style="height:10px;"></div>
+          <label class="label">热力图活动</label>
+          <select id="heatmapSelect" disabled></select>
+          <div style="height:10px;"></div>
+          <label class="label">单日占比日期</label>
+          <input id="singleDay" type="date" disabled />
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+          <div class="actions">
+            <button id="exportBtn" class="secondary" disabled>导出当前 HTML 报告</button>
+          </div>
+          <div class="muted" style="margin-top:10px;">导出的 HTML 可直接转发给别人打开。</div>
+        </div>
+      </aside>
+
+      <main class="card content">
+        <div id="status" class="ok">等待上传 Excel。</div>
+        <div class="divider"></div>
+
+        <div class="stats">
+          <div class="stat"><div class="k">总时长</div><div class="v" id="totalMinutes">-</div></div>
+          <div class="stat"><div class="k">覆盖天数</div><div class="v" id="totalDays">-</div></div>
+          <div class="stat"><div class="k">活动类型数</div><div class="v" id="activityCount">-</div></div>
+          <div class="stat"><div class="k">平均每日时长</div><div class="v" id="avgDaily">-</div></div>
+        </div>
+
+        <div class="section">
+          <h2>1. 各类活动每天总时长折线图</h2>
+          <div id="lineChart" class="chart"></div>
+        </div>
+
+        <div class="row section">
+          <div>
+            <h2>2. 单日时间占比</h2>
+            <div id="dailyPie" class="chart"></div>
+          </div>
+          <div>
+            <h2>3. 周期内时间占比</h2>
+            <div id="periodPie" class="chart"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>4. 不同日期与时段活跃热力图</h2>
+          <div id="heatmap" class="chart tall"></div>
+        </div>
+
+        <div class="section">
+          <h2>5. 一周结构图</h2>
+          <div id="weekdayMap" class="chart"></div>
+        </div>
+
+        <div class="section">
+          <h2>6. 复盘重点</h2>
+          <div id="topTable" class="table-wrap"></div>
+        </div>
+
+        <div class="section">
+          <h2>7. 原始复盘总结</h2>
+          <div id="summaryBox" class="summary-box">上传文件后展示。</div>
+        </div>
+
+        <div class="section">
+          <h2>8. 数据预览</h2>
+          <div id="detailTable" class="table-wrap"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const colorMap = {
+      "学习": "#4F8EF7",
+      "睡觉": "#7A5CFA",
+      "吃饭": "#F2A65A",
+      "休息": "#7BC67E",
+      "社交": "#FF7A90",
+      "玩手机": "#9A9A9A",
+      "运动": "#E85D75",
+      "见闻": "#00B8A9",
+    };
+
+    const state = {
+      detail: [],
+      daily: [],
+      summary: [],
+      filtered: [],
+      activities: [],
+      selectedActivities: [],
+      startDate: null,
+      endDate: null,
+      selectedDay: null,
+      heatmapActivity: "全部",
+      workbookName: "爱时间复盘报告",
+    };
+
+    const cnWeekdays = {
+      0: "周日",
+      1: "周一",
+      2: "周二",
+      3: "周三",
+      4: "周四",
+      5: "周五",
+      6: "周六"
+    };
+
+    const dom = {
+      fileInput: document.getElementById("fileInput"),
+      startDate: document.getElementById("startDate"),
+      endDate: document.getElementById("endDate"),
+      activitySelectList: document.getElementById("activitySelectList"),
+      activityAllBtn: document.getElementById("activityAllBtn"),
+      activityNoneBtn: document.getElementById("activityNoneBtn"),
+      heatmapSelect: document.getElementById("heatmapSelect"),
+      singleDay: document.getElementById("singleDay"),
+      exportBtn: document.getElementById("exportBtn"),
+      status: document.getElementById("status"),
+      totalMinutes: document.getElementById("totalMinutes"),
+      totalDays: document.getElementById("totalDays"),
+      activityCount: document.getElementById("activityCount"),
+      avgDaily: document.getElementById("avgDaily"),
+      lineChart: document.getElementById("lineChart"),
+      dailyPie: document.getElementById("dailyPie"),
+      periodPie: document.getElementById("periodPie"),
+      heatmap: document.getElementById("heatmap"),
+      weekdayMap: document.getElementById("weekdayMap"),
+      topTable: document.getElementById("topTable"),
+      summaryBox: document.getElementById("summaryBox"),
+      detailTable: document.getElementById("detailTable"),
+    };
+
+    function setStatus(type, text) {
+      dom.status.className = type;
+      dom.status.textContent = text;
+    }
+
+    function isBlank(value) {
+      return value === null || value === undefined || value === "";
+    }
+
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function toISODate(date) {
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+
+    function parseDateValue(value) {
+      if (isBlank(value)) return null;
+      if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+      if (typeof value === "number" && isFinite(value)) {
+        // Excel serial date fallback
+        const utcDays = Math.floor(value - 25569);
+        const utcValue = utcDays * 86400;
+        return new Date(utcValue * 1000);
+      }
+      const text = String(value).trim();
+      if (!text) return null;
+      const direct = new Date(text.replace(/\./g, "-").replace(/\//g, "-"));
+      if (!Number.isNaN(direct.getTime())) return new Date(direct.getFullYear(), direct.getMonth(), direct.getDate());
+      return null;
+    }
+
+    function parseTimeValue(value) {
+      if (isBlank(value)) return null;
+      if (value instanceof Date) return { h: value.getHours(), m: value.getMinutes() };
+      if (typeof value === "number" && isFinite(value)) {
+        const totalMinutes = Math.round(value * 24 * 60);
+        return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
+      }
+      const text = String(value).trim();
+      if (!text) return null;
+      if (text === "24:00") return { h: 0, m: 0 };
+      const m = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (!m) return null;
+      return { h: Number(m[1]), m: Number(m[2]) };
+    }
+
+    function combineDateTime(dateObj, timeObj) {
+      if (!dateObj || !timeObj) return null;
+      const dt = new Date(dateObj);
+      dt.setHours(timeObj.h, timeObj.m, 0, 0);
+      return dt;
+    }
+
+    function minutesBetween(start, end) {
+      if (!start || !end) return null;
+      return Math.round((end - start) / 60000);
+    }
+
+    function minutesToText(minutes) {
+      if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "-";
+      const m = Math.round(minutes);
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      if (h && mm) return `${h}小时${mm}分钟`;
+      if (h) return `${h}小时`;
+      return `${mm}分钟`;
+    }
+
+    function normalizeHeaderText(value) {
+      return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
+    }
+
+    function hasAnyContent(row) {
+      return Object.values(row || {}).some(value => !isBlank(value));
+    }
+
+    function normalizeDetailRow(row, context = {}) {
+      const rawDate = row["日期"] ?? row["date"];
+      const rawActivity = row["时间类型"] ?? row["activity"];
+      const date = parseDateValue(rawDate) || context.lastDate || null;
+      const startTime = parseTimeValue(row["开始时间"] ?? row["start_time"]);
+      const endTime = parseTimeValue(row["结束时间"] ?? row["end_time"]);
+      const durationMinRaw = row["时长(分钟数)"] ?? row["duration_min"];
+      let activity = String(rawActivity ?? "").trim();
+      const subtype = row["子类型"] ?? row["subtype"] ?? "";
+      const note = row["备注"] ?? row["note"] ?? "";
+      if (!activity) activity = context.lastActivity || "未分类";
+      const startDt = combineDateTime(date, startTime);
+      let endDt = combineDateTime(date, endTime);
+      if (startDt && endDt && endDt <= startDt) {
+        endDt = new Date(endDt.getTime() + 24 * 60 * 60 * 1000);
+      }
+      let durationMin = Number(durationMinRaw);
+      if (!Number.isFinite(durationMin)) durationMin = minutesBetween(startDt, endDt);
+      if (!hasAnyContent({ date: rawDate, startTime, endTime, durationMinRaw, activity: rawActivity, subtype, note })) return null;
+      if (!activity || activity === "nan" || activity === "None") activity = "未分类";
+      return {
+        date,
+        dateStr: date ? toISODate(date) : "",
+        startTime,
+        endTime,
+        startDt,
+        endDt,
+        durationMin,
+        activity,
+        subtype,
+        note,
+        weekday: date ? cnWeekdays[date.getDay()] : "",
+        hour: startDt ? startDt.getHours() : null,
+      };
+    }
+
+    function normalizeDailyRow(row) {
+      const out = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "日期" || key === "date") {
+          out.date = parseDateValue(value);
+          out.dateStr = out.date ? toISODate(out.date) : "";
+        } else {
+          const num = Number(value);
+          out[key] = Number.isFinite(num) ? num : value;
+        }
+      }
+      return out;
+    }
+
+    function formatDateInput(date) {
+      return date ? toISODate(date) : "";
+    }
+
+    function getSheetRows(workbook, names) {
+      for (const name of workbook.SheetNames) {
+        if (names.some(n => name.includes(n))) {
+          return { name, rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { defval: null }) };
+        }
+      }
+      const first = workbook.SheetNames[0];
+      return { name: first, rows: XLSX.utils.sheet_to_json(workbook.Sheets[first], { defval: null }) };
+    }
+
+    function getSheet(workbook, names) {
+      for (const name of workbook.SheetNames) {
+        if (names.some(n => name.includes(n))) {
+          return workbook.Sheets[name];
+        }
+      }
+      return workbook.Sheets[workbook.SheetNames[0]];
+    }
+
+    function findHeaderRow(matrix, candidates) {
+      const wanted = candidates.map(normalizeHeaderText);
+      let bestIndex = 0;
+      let bestScore = -1;
+      for (let i = 0; i < Math.min(matrix.length, 30); i++) {
+        const row = matrix[i] || [];
+        const normalized = row.map(normalizeHeaderText);
+        let score = 0;
+        for (const want of wanted) {
+          if (normalized.some(cell => cell.includes(want))) score += 1;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      return bestIndex;
+    }
+
+    function buildObjectFromRow(headers, row) {
+      const obj = {};
+      headers.forEach((header, idx) => {
+        obj[header] = row[idx] ?? "";
+      });
+      return obj;
+    }
+
+    function loadDetailRows(sheet) {
+      if (!sheet) return [];
+
+      const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+      const normalizedJson = jsonRows.map(r => normalizeDetailRow(r)).filter(Boolean);
+      if (normalizedJson.length >= 500) return normalizedJson;
+
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+      if (!matrix.length) return normalizedJson;
+
+      const headerIdx = findHeaderRow(matrix, ["日期", "开始时间", "结束时间", "时长", "时间类型"]);
+      const headers = (matrix[headerIdx] || []).map(v => String(v ?? "").trim());
+      const rows = [];
+      let lastDate = null;
+      let lastActivity = null;
+
+      for (let i = headerIdx + 1; i < matrix.length; i++) {
+        const line = matrix[i] || [];
+        if (!line.some(cell => !isBlank(cell))) continue;
+        const obj = buildObjectFromRow(headers, line);
+        const parsed = normalizeDetailRow(obj, { lastDate, lastActivity });
+        if (!parsed) continue;
+        if (parsed.date) lastDate = parsed.date;
+        if (parsed.activity && parsed.activity !== "未分类") lastActivity = parsed.activity;
+        rows.push(parsed);
+      }
+
+      return rows.length >= normalizedJson.length ? rows : normalizedJson;
+    }
+
+    function groupBy(rows, keyFn, valueFn) {
+      const map = new Map();
+      for (const row of rows) {
+        const key = keyFn(row);
+        if (key === null || key === undefined || key === "") continue;
+        const v = valueFn(row);
+        if (!Number.isFinite(v)) continue;
+        map.set(key, (map.get(key) || 0) + v);
+      }
+      return map;
+    }
+
+    function sum(arr) {
+      return arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+    }
+
+    function unique(arr) {
+      return [...new Set(arr.filter(v => !isBlank(v)))];
+    }
+
+    function withinRange(dateStr, start, end) {
+      if (!dateStr) return false;
+      return (!start || dateStr >= start) && (!end || dateStr <= end);
+    }
+
+    function renderStat(value, el) {
+      el.textContent = value;
+    }
+
+    function buildTable(headers, rows) {
+      const thead = `<thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${rows.map(r => `<tr>${headers.map(h => `<td>${escapeHtml(r[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      return `<table>${thead}${tbody}</table>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function getSelectedActivities() {
+      return [...dom.activitySelectList.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+    }
+
+    function applyFilters() {
+      const start = dom.startDate.value || null;
+      const end = dom.endDate.value || null;
+      const selectedActivities = getSelectedActivities();
+      const selectedDay = dom.singleDay.value || null;
+      const heatmapActivity = dom.heatmapSelect.value || "全部";
+
+      let filtered = state.detail.filter(row => withinRange(row.dateStr, start, end));
+      if (selectedActivities.length) {
+        filtered = filtered.filter(row => selectedActivities.includes(row.activity));
+      }
+
+      state.filtered = filtered;
+      state.selectedActivities = selectedActivities;
+      state.startDate = start;
+      state.endDate = end;
+      state.selectedDay = selectedDay;
+      state.heatmapActivity = heatmapActivity;
+      renderAll();
+    }
+
+    function aggregateDailyActivity(rows) {
+      const items = [];
+      for (const row of rows) {
+        items.push({ dateStr: row.dateStr, date: row.date, activity: row.activity, durationMin: row.durationMin });
+      }
+      const map = new Map();
+      for (const item of items) {
+        const k = `${item.dateStr}|||${item.activity}`;
+        map.set(k, (map.get(k) || 0) + (Number.isFinite(item.durationMin) ? item.durationMin : 0));
+      }
+      const result = [];
+      for (const [k, durationMin] of map.entries()) {
+        const [dateStr, activity] = k.split("|||");
+        result.push({ dateStr, date: new Date(dateStr), activity, durationMin });
+      }
+      result.sort((a, b) => a.dateStr.localeCompare(b.dateStr) || a.activity.localeCompare(b.activity, "zh-Hans-CN"));
+      return result;
+    }
+
+    function aggregateShare(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        map.set(row.activity, (map.get(row.activity) || 0) + (Number.isFinite(row.durationMin) ? row.durationMin : 0));
+      }
+      const total = sum([...map.values()]);
+      return [...map.entries()]
+        .map(([activity, durationMin]) => ({ activity, durationMin, share: total ? durationMin / total : 0 }))
+        .sort((a, b) => b.durationMin - a.durationMin);
+    }
+
+    function aggregateDailyShare(rows, dateStr) {
+      const filtered = rows.filter(row => row.dateStr === dateStr);
+      return aggregateShare(filtered);
+    }
+
+    function buildLineChart(dailyActivity) {
+      const traces = [];
+      const byActivity = new Map();
+      for (const row of dailyActivity) {
+        if (!byActivity.has(row.activity)) byActivity.set(row.activity, []);
+        byActivity.get(row.activity).push(row);
+      }
+      for (const [activity, rows] of byActivity.entries()) {
+        traces.push({
+          x: rows.map(r => r.dateStr),
+          y: rows.map(r => r.durationMin),
+          type: "scatter",
+          mode: "lines+markers",
+          name: activity,
+          line: { width: 2, color: colorMap[activity] || undefined },
+          marker: { size: 6 },
+          hovertemplate: "%{x}<br>%{fullData.name}：%{customdata}<extra></extra>",
+          customdata: rows.map(r => minutesToText(r.durationMin))
+        });
+      }
+      return {
+        data: traces,
+        layout: {
+          margin: { l: 70, r: 240, t: 80, b: 90 },
+          paper_bgcolor: "white",
+          plot_bgcolor: "white",
+          xaxis: { title: "日期", gridcolor: "#eef2f7", automargin: true, tickangle: -30 },
+          yaxis: { title: "分钟", gridcolor: "#eef2f7", automargin: true },
+          legend: {
+            orientation: "v",
+            x: 1.02,
+            y: 1,
+            xanchor: "left",
+            yanchor: "top",
+            font: { size: 12 },
+            bgcolor: "rgba(255,255,255,0.92)"
+          },
+          yaxis: {
+            title: "时长",
+            gridcolor: "#eef2f7",
+            automargin: true,
+            tickformat: ",.0f"
+          },
+          hovermode: "x unified",
+          title: "各类活动每天总时长折线图"
+        }
+      };
+    }
+
+    function buildPieChart(rows, title) {
+      return {
+        data: [{
+          type: "pie",
+          labels: rows.map(r => r.activity),
+          values: rows.map(r => r.durationMin),
+          hole: 0.38,
+          textinfo: "percent",
+          textposition: "inside",
+          sort: false,
+          marker: { colors: rows.map(r => colorMap[r.activity] || "#9ca3af") }
+        }],
+        layout: {
+          title,
+          margin: { l: 20, r: 220, t: 70, b: 40 },
+          paper_bgcolor: "white",
+          plot_bgcolor: "white",
+          showlegend: true,
+          legend: {
+            orientation: "v",
+            x: 1.02,
+            y: 1,
+            xanchor: "left",
+            yanchor: "top",
+            font: { size: 12 },
+            bgcolor: "rgba(255,255,255,0.92)"
+          }
+        }
+      };
+    }
+
+    function buildHeatmap(rows, activity, startDate, endDate) {
+      const filtered = activity === "全部" ? rows : rows.filter(r => r.activity === activity);
+      const dateSet = [];
+      if (startDate && endDate) {
+        const cursor = new Date(`${startDate}T00:00:00`);
+        const end = new Date(`${endDate}T00:00:00`);
+        while (cursor <= end) {
+          dateSet.push(toISODate(cursor));
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      } else {
+        dateSet.push(...unique(filtered.map(r => r.dateStr)).sort());
+      }
+      const z = dateSet.map(() => Array.from({ length: 24 }, () => 0));
+      const customdata = dateSet.map(() => Array.from({ length: 24 }, () => ""));
+      for (const row of filtered) {
+        if (!row.dateStr || row.hour === null || row.hour === undefined) continue;
+        const i = dateSet.indexOf(row.dateStr);
+        if (i < 0) continue;
+        z[i][row.hour] += Number.isFinite(row.durationMin) ? row.durationMin : 0;
+        customdata[i][row.hour] = minutesToText(z[i][row.hour]);
+      }
+      return {
+        data: [{
+          type: "heatmap",
+          x: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`),
+          y: dateSet,
+          z,
+          customdata,
+          colorscale: "YlOrRd",
+          reversescale: false,
+          colorbar: { title: "时长" },
+          hovertemplate: "日期：%{y}<br>时段：%{x}<br>时长：%{customdata}<extra></extra>"
+        }],
+        layout: {
+          title: `${activity} 活跃热力图`,
+          margin: { l: 110, r: 40, t: 70, b: 70 },
+          paper_bgcolor: "white",
+          plot_bgcolor: "white",
+          xaxis: {
+            title: "一天 24 小时时间段",
+            gridcolor: "#eef2f7",
+            tickmode: "array",
+            tickvals: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`),
+            ticktext: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`)
+          },
+          yaxis: { title: "选择的日期", autorange: "reversed", automargin: true }
+        }
+      };
+    }
+
+    function buildWeekdayHeatmap(rows) {
+      const weekdays = ["周一","周二","周三","周四","周五","周六","周日"];
+      const activities = unique(rows.map(r => r.activity));
+      const z = weekdays.map(() => activities.map(() => 0));
+      const customdata = weekdays.map(() => activities.map(() => ""));
+      for (const row of rows) {
+        const wi = weekdays.indexOf(row.weekday);
+        const ai = activities.indexOf(row.activity);
+        if (wi >= 0 && ai >= 0) {
+          z[wi][ai] += Number.isFinite(row.durationMin) ? row.durationMin : 0;
+          customdata[wi][ai] = minutesToText(z[wi][ai]);
+        }
+      }
+      return {
+        data: [{
+          type: "heatmap",
+          x: activities,
+          y: weekdays,
+          z,
+          customdata,
+          colorscale: "YlOrRd",
+          reversescale: false,
+          colorbar: { title: "时长" },
+          hovertemplate: "周几：%{y}<br>活动：%{x}<br>时长：%{customdata}<extra></extra>"
+        }],
+        layout: {
+          title: "一周结构图：不同活动在周几的总时长",
+          margin: { l: 90, r: 40, t: 70, b: 80 },
+          paper_bgcolor: "white",
+          plot_bgcolor: "white",
+          xaxis: { title: "活动类型", automargin: true, tickangle: -30 },
+          yaxis: { title: "周几", automargin: true }
+        }
+      };
+    }
+
+    function buildTopTable(rows) {
+      const totals = aggregateShare(rows).slice(0, 5);
+      return buildTable(
+        ["活动类型", "时长", "占比"],
+        totals.map(r => ({
+          "活动类型": r.activity,
+          "时长": minutesToText(r.durationMin),
+          "占比": `${(r.share * 100).toFixed(1)}%`
+        }))
+      );
+    }
+
+    function buildDetailPreview(rows) {
+      const preview = rows.slice(0, 60).map(r => ({
+        "日期": r.dateStr,
+        "开始": r.startTime ? `${pad(r.startTime.h)}:${pad(r.startTime.m)}` : "",
+        "结束": r.endTime ? `${pad(r.endTime.h)}:${pad(r.endTime.m)}` : "",
+        "时长": minutesToText(r.durationMin),
+        "活动": r.activity,
+        "备注": r.note || ""
+      }));
+      return buildTable(["日期", "开始", "结束", "时长", "活动", "备注"], preview);
+    }
+
+    function buildSummaryBox(rows) {
+      if (!rows.length) return "上传文件后展示。";
+      const sample = rows.slice(0, 8);
+      return sample.map(r => `${escapeHtml(r["类型"] ?? r.type ?? "")} ${escapeHtml(r["时间"] ?? r.time ?? "")} ${escapeHtml(r["内容"] ?? r.content ?? "")}`).join("<br>");
+    }
+
+    function renderOptions() {
+      dom.activitySelectList.innerHTML = "";
+      dom.heatmapSelect.innerHTML = "";
+
+      const activities = state.activities;
+      for (const act of activities) {
+        const label = document.createElement("label");
+        label.className = "activity-item";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = act;
+        input.checked = true;
+        input.addEventListener("change", applyFilters);
+        const span = document.createElement("span");
+        span.textContent = act;
+        label.appendChild(input);
+        label.appendChild(span);
+        dom.activitySelectList.appendChild(label);
+      }
+      dom.activitySelectList.classList.remove("disabled");
+
+      const heatOptAll = document.createElement("option");
+      heatOptAll.value = "全部";
+      heatOptAll.textContent = "全部";
+      dom.heatmapSelect.appendChild(heatOptAll);
+      for (const act of activities) {
+        const opt = document.createElement("option");
+        opt.value = act;
+        opt.textContent = act;
+        dom.heatmapSelect.appendChild(opt);
+      }
+      dom.heatmapSelect.value = "全部";
+    }
+
+    function renderAll() {
+      const rows = state.filtered;
+      const dailyActivity = aggregateDailyActivity(rows);
+      const periodShare = aggregateShare(rows);
+      const selectedDay = state.selectedDay || (rows[0] ? rows[0].dateStr : null);
+      const dayShare = selectedDay ? aggregateDailyShare(rows, selectedDay) : [];
+
+      const totalMinutes = sum(rows.map(r => r.durationMin));
+      const totalDays = unique(rows.map(r => r.dateStr)).length;
+      const activityCount = unique(rows.map(r => r.activity)).length;
+      const avgDaily = totalDays ? totalMinutes / totalDays : 0;
+
+      renderStat(minutesToText(totalMinutes), dom.totalMinutes);
+      renderStat(String(totalDays), dom.totalDays);
+      renderStat(String(activityCount), dom.activityCount);
+      renderStat(minutesToText(avgDaily), dom.avgDaily);
+
+      const lineFig = buildLineChart(dailyActivity);
+      const dayPieFig = buildPieChart(dayShare, `${selectedDay || "-"} 时间占比`);
+      const periodPieFig = buildPieChart(periodShare, `${state.startDate || "-"} 至 ${state.endDate || "-"} 时间占比`);
+      const heatmapFig = buildHeatmap(rows, state.heatmapActivity, state.startDate, state.endDate);
+      const weekdayFig = buildWeekdayHeatmap(rows);
+      Plotly.newPlot(dom.lineChart, lineFig.data, lineFig.layout, {responsive: true, displayModeBar: false});
+      Plotly.newPlot(dom.dailyPie, dayPieFig.data, dayPieFig.layout, {responsive: true, displayModeBar: false});
+      Plotly.newPlot(dom.periodPie, periodPieFig.data, periodPieFig.layout, {responsive: true, displayModeBar: false});
+      Plotly.newPlot(dom.heatmap, heatmapFig.data, heatmapFig.layout, {responsive: true, displayModeBar: false});
+      Plotly.newPlot(dom.weekdayMap, weekdayFig.data, weekdayFig.layout, {responsive: true, displayModeBar: false});
+
+      dom.topTable.innerHTML = buildTopTable(rows);
+      dom.summaryBox.innerHTML = buildSummaryBox(state.summary);
+      dom.detailTable.innerHTML = buildDetailPreview(rows);
+      setStatus("ok", `已载入 ${rows.length} 条明细记录，可直接查看和筛选。`);
+    }
+
+    function updateFilterBounds() {
+      const dates = state.detail.map(r => r.dateStr).filter(Boolean).sort();
+      const minDate = dates[0];
+      const maxDate = dates[dates.length - 1];
+      dom.startDate.min = minDate;
+      dom.startDate.max = maxDate;
+      dom.endDate.min = minDate;
+      dom.endDate.max = maxDate;
+      dom.singleDay.min = minDate;
+      dom.singleDay.max = maxDate;
+      dom.startDate.value = minDate;
+      dom.endDate.value = maxDate;
+      dom.singleDay.value = maxDate;
+      state.startDate = minDate;
+      state.endDate = maxDate;
+      state.selectedDay = maxDate;
+    }
+
+    function enableControls(enabled) {
+      for (const el of [dom.startDate, dom.endDate, dom.heatmapSelect, dom.singleDay, dom.exportBtn, dom.activityAllBtn, dom.activityNoneBtn]) {
+        el.disabled = !enabled;
+      }
+      if (!enabled) {
+        dom.activitySelectList.classList.add("disabled");
+      }
+    }
+
+    function exportHtml() {
+      const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(state.workbookName)}</title></head><body><h1>${escapeHtml(state.workbookName)}</h1><p>导出报告请在网页端使用本应用继续生成。</p></body></html>`;
+      const blob = new Blob([html], {type: "text/html"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${state.workbookName}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      try {
+        setStatus("ok", "正在读取 Excel...");
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: "array", cellDates: true });
+        const detailSheet = getSheet(workbook, ["详细记录"]);
+        const dailySheet = getSheetRows(workbook, ["日统计"]);
+        const summarySheet = getSheetRows(workbook, ["复盘总结"]);
+
+        state.detail = loadDetailRows(detailSheet);
+        state.daily = dailySheet.rows.map(normalizeDailyRow);
+        state.summary = summarySheet.rows;
+        state.workbookName = file.name.replace(/\.[^.]+$/, "");
+        state.activities = unique(state.detail.map(r => r.activity)).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+
+        if (!state.detail.length) {
+          setStatus("error", "未识别到“详细记录”中的有效明细。请确认导出的 Excel 是爱时间格式。");
+          enableControls(false);
+          return;
+        }
+
+        renderOptions();
+        updateFilterBounds();
+        enableControls(true);
+        applyFilters();
+        if (state.detail.length < 500) {
+          setStatus("ok", `已载入 ${state.detail.length} 条明细记录。当前文件记录数少于 500 条，或原始数据本身少于该数量；已启用容错解析。`);
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus("error", `读取失败：${err.message || err}`);
+      }
+    }
+
+    dom.fileInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
+    dom.startDate.addEventListener("change", applyFilters);
+    dom.endDate.addEventListener("change", applyFilters);
+    dom.singleDay.addEventListener("change", applyFilters);
+    dom.heatmapSelect.addEventListener("change", applyFilters);
+    dom.activityAllBtn.addEventListener("click", () => {
+      dom.activitySelectList.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.checked = true;
+      });
+      applyFilters();
+    });
+    dom.activityNoneBtn.addEventListener("click", () => {
+      dom.activitySelectList.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.checked = false;
+      });
+      applyFilters();
+    });
+    dom.exportBtn.addEventListener("click", exportHtml);
+
+    enableControls(false);
+  </script>
+</body>
+</html>
